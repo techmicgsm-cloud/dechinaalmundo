@@ -59,14 +59,16 @@ export default function AdminLayout({
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-6 border-b border-sidebar-border">
-            <Link href="/admin" className="flex items-center gap-3">
+          <div className="py-8 px-6 border-b border-sidebar-border bg-gradient-to-b from-sidebar-accent/20 to-transparent">
+            <Link href="/admin" className="flex items-center justify-center group relative">
+              <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
               <Image
                 src="/images/logo.png"
                 alt="De China al Mundo"
-                width={140}
-                height={47}
-                className="h-10 w-auto object-contain"
+                width={280}
+                height={94}
+                className="h-16 sm:h-16 lg:h-[80px] w-auto object-contain relative z-10 transition-transform duration-500 group-hover:scale-[1.02] drop-shadow-[0_0_15px_rgba(255,255,255,0.05)]"
+                priority
               />
             </Link>
           </div>
