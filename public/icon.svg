@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#0a0a0a"/>
+  <g transform="translate(4, 6) scale(0.75)">
+    <!-- Airplane body -->
+    <path d="M16 2 L20 8 L28 10 L28 14 L20 12 L18 18 L22 22 L22 24 L16 20 L10 24 L10 22 L14 18 L12 12 L4 14 L4 10 L12 8 L16 2Z" fill="#C41E3A"/>
+    <!-- Windows -->
+    <ellipse cx="15" cy="7" rx="1.5" ry="1" fill="#F5D033"/>
+    <ellipse cx="18" cy="7" rx="1.5" ry="1" fill="#F5D033"/>
+  </g>
+  <!-- Golden swoosh -->
+  <path d="M4 26 Q16 20 28 26" stroke="#F5D033" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg>
