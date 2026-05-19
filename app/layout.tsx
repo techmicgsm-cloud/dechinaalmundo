@@ -15,7 +15,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'De China al Mundo | Seguimiento de Envíos Internacionales',
   description: 'Plataforma líder en logística internacional. Rastrea tus importaciones desde China en tiempo real con la máxima seguridad y eficiencia.',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
