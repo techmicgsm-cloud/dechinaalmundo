@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Package,
@@ -18,97 +18,36 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  Loader2,
+  WifiOff,
 } from "lucide-react"
 import Link from "next/link"
+import { toast } from "sonner"
+import {
+  subscribeShipments,
+  createShipment,
+  updateShipmentStatus,
+  updateShipment,
+  deleteShipment,
+  type Shipment,
+  type ShipmentStatus,
+  type CreateShipmentData,
+} from "@/lib/shipments"
 
-// Shipments data
-const initialShipments = [
-  {
-    id: "DCM-DEMO01",
-    client: "María García",
-    phone: "+54 9 11 1234-5678",
-    address: "Av. Corrientes 1234, Buenos Aires",
-    status: "en_transito",
-    date: "2024-01-15",
-    estimatedDate: "2024-01-25",
-    weight: "12.5 kg",
-    type: "air",
-    destination: "Buenos Aires, Argentina",
-  },
-  {
-    id: "DCM-AR2401",
-    client: "Carlos López",
-    phone: "+54 9 351 234-5678",
-    address: "San Martín 567, Córdoba",
-    status: "entregado",
-    date: "2024-01-14",
-    estimatedDate: "2024-01-20",
-    weight: "8.2 kg",
-    type: "sea",
-    destination: "Córdoba, Argentina",
-  },
-  {
-    id: "CN-TRACK01",
-    client: "Ana Martínez",
-    phone: "+54 9 261 345-6789",
-    address: "Las Heras 890, Mendoza",
-    status: "en_aduana",
-    date: "2024-01-13",
-    estimatedDate: "2024-01-28",
-    weight: "25.0 kg",
-    type: "air",
-    destination: "Mendoza, Argentina",
-  },
-  {
-    id: "DCM-RS2401",
-    client: "Roberto Sánchez",
-    phone: "+54 9 341 456-7890",
-    address: "Pellegrini 123, Rosario",
-    status: "pendiente",
-    date: "2024-01-12",
-    estimatedDate: "2024-02-05",
-    weight: "45.0 kg",
-    type: "sea",
-    destination: "Rosario, Argentina",
-  },
-  {
-    id: "DCM-LP2401",
-    client: "Laura Fernández",
-    phone: "+54 9 221 567-8901",
-    address: "Calle 7 456, La Plata",
-    status: "en_transito",
-    date: "2024-01-11",
-    estimatedDate: "2024-01-22",
-    weight: "5.8 kg",
-    type: "air",
-    destination: "La Plata, Argentina",
-  },
-  {
-    id: "DCM-BA2401",
-    client: "Diego Ramírez",
-    phone: "+54 9 11 678-9012",
-    address: "Florida 789, Buenos Aires",
-    status: "en_transito",
-    date: "2024-01-10",
-    estimatedDate: "2024-01-18",
-    weight: "3.2 kg",
-    type: "air",
-    destination: "Buenos Aires, Argentina",
-  },
-]
+// ─── Config ───────────────────────────────────────────────────────────────────
 
-const statusConfig: Record<string, { label: string; class: string }> = {
-  pendiente: { label: "Pendiente", class: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+const statusConfig: Record<ShipmentStatus, { label: string; class: string }> = {
+  pendiente:   { label: "Pendiente",   class: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
   en_transito: { label: "En Tránsito", class: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-  en_aduana: { label: "En Aduana", class: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
-  entregado: { label: "Entregado", class: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  en_aduana:   { label: "En Aduana",   class: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+  entregado:   { label: "Entregado",   class: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
 }
 
-const statusOptions = [
-  { value: "pendiente", label: "Pendiente" },
+const statusOptions: { value: ShipmentStatus; label: string }[] = [
+  { value: "pendiente",   label: "Pendiente" },
   { value: "en_transito", label: "En Tránsito" },
-  { value: "en_aduana", label: "En Aduana" },
-  { value: "entregado", label: "Entregado" },
+  { value: "en_aduana",   label: "En Aduana" },
+  { value: "entregado",   label: "Entregado" },
 ]
 
 const typeOptions = [
@@ -116,38 +55,66 @@ const typeOptions = [
   { value: "sea", label: "Marítimo" },
 ]
 
-type Shipment = typeof initialShipments[0]
+// ─── Empty form state ─────────────────────────────────────────────────────────
+
+const emptyForm: CreateShipmentData = {
+  customerName:      "",
+  phone:             "",
+  address:           "",
+  destination:       "",
+  status:            "pendiente",
+  estimatedDelivery: "",
+  weight:            "",
+  serviceType:       "air",
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function EnviosPage() {
-  const [shipments, setShipments] = useState(initialShipments)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
+  const [shipments,       setShipments]       = useState<Shipment[]>([])
+  const [loading,         setLoading]         = useState(true)
+  const [firestoreError,  setFirestoreError]  = useState<string | null>(null)
+  const [searchTerm,      setSearchTerm]      = useState("")
+  const [filterStatus,    setFilterStatus]    = useState("all")
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
+  const [showEditModal,   setShowEditModal]   = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 5
+  const [selectedShipment,setSelectedShipment]= useState<Shipment | null>(null)
+  const [currentPage,     setCurrentPage]     = useState(1)
+  const [formData,        setFormData]        = useState<CreateShipmentData>(emptyForm)
+  const [submitting,      setSubmitting]      = useState(false)
+  const [updatingStatus,  setUpdatingStatus]  = useState<string | null>(null) // shipment id being updated
+  const itemsPerPage = 8
 
-  // Form state for create/edit
-  const [formData, setFormData] = useState({
-    id: "",
-    client: "",
-    phone: "",
-    address: "",
-    status: "pendiente",
-    estimatedDate: "",
-    weight: "",
-    type: "air",
-    destination: "",
-  })
+  // ── Firestore real-time subscription ──────────────────────────────────────
 
-  // Filter and search shipments
-  const filteredShipments = shipments.filter((shipment) => {
+  useEffect(() => {
+    setLoading(true)
+
+    const unsubscribe = subscribeShipments(
+      (data) => {
+        setShipments(data)
+        setLoading(false)
+        setFirestoreError(null)
+      },
+      (error) => {
+        console.error("Firestore error:", error)
+        setFirestoreError("No se pudo conectar con la base de datos. Verifica tu conexión.")
+        setLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [])
+
+  // ── Filtering & pagination ─────────────────────────────────────────────────
+
+  const filteredShipments = shipments.filter((s) => {
     const matchesSearch =
-      shipment.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      shipment.client.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = filterStatus === "all" || shipment.status === filterStatus
+      s.trackingCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.destination.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = filterStatus === "all" || s.status === filterStatus
     return matchesSearch && matchesStatus
   })
 
@@ -157,60 +124,88 @@ export default function EnviosPage() {
     currentPage * itemsPerPage
   )
 
-  const generateTrackingCode = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    const year = new Date().getFullYear().toString().slice(-2)
-    let suffix = ""
-    for (let i = 0; i < 4; i++) {
-      suffix += chars.charAt(Math.floor(Math.random() * chars.length))
+  // Reset to page 1 when filters change
+  useEffect(() => { setCurrentPage(1) }, [searchTerm, filterStatus])
+
+  // ── CRUD Handlers ──────────────────────────────────────────────────────────
+
+  const handleCreateShipment = async () => {
+    if (!formData.customerName || !formData.phone || !formData.destination) return
+    setSubmitting(true)
+    try {
+      const trackingCode = await createShipment(formData)
+      toast.success(`Envío creado exitosamente`, {
+        description: `Código de seguimiento: ${trackingCode}`,
+      })
+      setShowCreateModal(false)
+      setFormData(emptyForm)
+    } catch (err) {
+      console.error(err)
+      toast.error("Error al crear el envío", {
+        description: "Verifica tu conexión e inténtalo de nuevo.",
+      })
+    } finally {
+      setSubmitting(false)
     }
-    return `DCM-${suffix}${year}`
   }
 
-  const handleCreateShipment = () => {
-    const newShipment: Shipment = {
-      ...formData,
-      id: generateTrackingCode(),
-      date: new Date().toISOString().split("T")[0],
+  const handleEditShipment = async () => {
+    if (!selectedShipment) return
+    setSubmitting(true)
+    try {
+      await updateShipment(selectedShipment.id, formData)
+      toast.success("Envío actualizado correctamente")
+      setShowEditModal(false)
+      setSelectedShipment(null)
+      setFormData(emptyForm)
+    } catch (err) {
+      console.error(err)
+      toast.error("Error al actualizar el envío")
+    } finally {
+      setSubmitting(false)
     }
-    setShipments([newShipment, ...shipments])
-    setShowCreateModal(false)
-    resetForm()
   }
 
-  const handleEditShipment = () => {
+  const handleDeleteShipment = async () => {
     if (!selectedShipment) return
-    setShipments(
-      shipments.map((s) =>
-        s.id === selectedShipment.id
-          ? { ...s, ...formData, id: selectedShipment.id, date: selectedShipment.date }
-          : s
-      )
-    )
-    setShowEditModal(false)
-    setSelectedShipment(null)
-    resetForm()
+    setSubmitting(true)
+    try {
+      await deleteShipment(selectedShipment.id)
+      toast.success("Envío eliminado")
+      setShowDeleteModal(false)
+      setSelectedShipment(null)
+    } catch (err) {
+      console.error(err)
+      toast.error("Error al eliminar el envío")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const handleDeleteShipment = () => {
-    if (!selectedShipment) return
-    setShipments(shipments.filter((s) => s.id !== selectedShipment.id))
-    setShowDeleteModal(false)
-    setSelectedShipment(null)
+  const handleStatusChange = async (shipment: Shipment, newStatus: ShipmentStatus) => {
+    setUpdatingStatus(shipment.id)
+    try {
+      await updateShipmentStatus(shipment.id, newStatus)
+      toast.success(`Estado actualizado a "${statusConfig[newStatus].label}"`)
+    } catch (err) {
+      console.error(err)
+      toast.error("Error al actualizar el estado")
+    } finally {
+      setUpdatingStatus(null)
+    }
   }
 
   const openEditModal = (shipment: Shipment) => {
     setSelectedShipment(shipment)
     setFormData({
-      id: shipment.id,
-      client: shipment.client,
-      phone: shipment.phone,
-      address: shipment.address,
-      status: shipment.status,
-      estimatedDate: shipment.estimatedDate,
-      weight: shipment.weight,
-      type: shipment.type,
-      destination: shipment.destination,
+      customerName:      shipment.customerName,
+      phone:             shipment.phone,
+      address:           shipment.address,
+      destination:       shipment.destination,
+      status:            shipment.status,
+      estimatedDelivery: shipment.estimatedDelivery,
+      weight:            shipment.weight,
+      serviceType:       shipment.serviceType,
     })
     setShowEditModal(true)
   }
@@ -220,25 +215,53 @@ export default function EnviosPage() {
     setShowDeleteModal(true)
   }
 
-  const resetForm = () => {
-    setFormData({
-      id: "",
-      client: "",
-      phone: "",
-      address: "",
-      status: "pendiente",
-      estimatedDate: "",
-      weight: "",
-      type: "air",
-      destination: "",
-    })
+  const closeModals = () => {
+    setShowCreateModal(false)
+    setShowEditModal(false)
+    setShowDeleteModal(false)
+    setSelectedShipment(null)
+    setFormData(emptyForm)
   }
 
-  const updateStatus = (shipmentId: string, newStatus: string) => {
-    setShipments(
-      shipments.map((s) => (s.id === shipmentId ? { ...s, status: newStatus } : s))
+  // ── Loading state ──────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-primary/20 rounded-full" />
+          <div className="absolute inset-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <Package className="absolute inset-0 m-auto w-6 h-6 text-primary" />
+        </div>
+        <p className="text-muted-foreground text-sm">Conectando con Firestore...</p>
+      </div>
     )
   }
+
+  // ── Firestore error state ──────────────────────────────────────────────────
+
+  if (firestoreError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 text-center">
+        <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center">
+          <WifiOff className="w-7 h-7 text-destructive" />
+        </div>
+        <div>
+          <p className="font-semibold text-foreground mb-1">Sin conexión con la base de datos</p>
+          <p className="text-sm text-muted-foreground max-w-sm">{firestoreError}</p>
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Reintentar
+        </button>
+      </div>
+    )
+  }
+
+  // ── Main render ────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -246,7 +269,9 @@ export default function EnviosPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Envíos</h1>
-          <p className="text-muted-foreground mt-1">Gestiona todos los envíos</p>
+          <p className="text-muted-foreground mt-1">
+            {shipments.length} envío{shipments.length !== 1 ? "s" : ""} en total · actualización en tiempo real
+          </p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -263,7 +288,7 @@ export default function EnviosPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Buscar por código o cliente..."
+            placeholder="Buscar por código, cliente o destino..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all"
@@ -278,10 +303,8 @@ export default function EnviosPage() {
               className="pl-10 pr-8 py-2.5 bg-card border border-border rounded-xl text-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="all">Todos los estados</option>
-              {statusOptions.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
+              {statusOptions.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
           </div>
@@ -292,164 +315,195 @@ export default function EnviosPage() {
         </div>
       </div>
 
-      {/* Shipments table */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">
-                  Tracking
-                </th>
-                <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">
-                  Cliente
-                </th>
-                <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">
-                  Estado
-                </th>
-                <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">
-                  Fecha
-                </th>
-                <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">
-                  Peso
-                </th>
-                <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">
-                  Destino
-                </th>
-                <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {paginatedShipments.map((shipment, index) => (
-                <motion.tr
-                  key={shipment.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="hover:bg-muted/30 transition-colors"
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {shipment.type === "air" ? (
-                        <Plane className="w-4 h-4 text-blue-400" />
-                      ) : (
-                        <Ship className="w-4 h-4 text-cyan-400" />
-                      )}
-                      <Link
-                        href={`/tracking/${shipment.id}`}
-                        className="text-sm font-mono font-medium text-primary hover:underline"
-                      >
-                        {shipment.id}
-                      </Link>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{shipment.client}</p>
-                      <p className="text-xs text-muted-foreground">{shipment.phone}</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <select
-                      value={shipment.status}
-                      onChange={(e) => updateStatus(shipment.id, e.target.value)}
-                      className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border cursor-pointer appearance-none ${
-                        statusConfig[shipment.status].class
-                      }`}
-                    >
-                      {statusOptions.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-muted-foreground">{shipment.date}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-foreground">{shipment.weight}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-muted-foreground truncate max-w-[150px] block">
-                      {shipment.destination}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1">
-                      <Link
-                        href={`/tracking/${shipment.id}`}
-                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                        title="Ver tracking"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Link>
-                      <button
-                        onClick={() => openEditModal(shipment)}
-                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                        title="Editar"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => openDeleteModal(shipment)}
-                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-border">
-            <p className="text-sm text-muted-foreground">
-              Mostrando {(currentPage - 1) * itemsPerPage + 1} a{" "}
-              {Math.min(currentPage * itemsPerPage, filteredShipments.length)} de{" "}
-              {filteredShipments.length} envíos
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
-                    currentPage === page
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Empty state */}
+      {filteredShipments.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center justify-center py-20 text-center"
+        >
+          <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+            <Package className="w-7 h-7 text-muted-foreground" />
           </div>
-        )}
-      </div>
+          <p className="font-medium text-foreground mb-1">
+            {searchTerm || filterStatus !== "all" ? "Sin resultados" : "No hay envíos aún"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {searchTerm || filterStatus !== "all"
+              ? "Prueba con otros filtros de búsqueda."
+              : "Crea el primer envío con el botón de arriba."}
+          </p>
+        </motion.div>
+      )}
 
-      {/* Create/Edit Modal */}
+      {/* Shipments table */}
+      {filteredShipments.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">Tracking</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">Cliente</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">Estado</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">Entrega est.</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">Peso</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">Destino</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-4">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {paginatedShipments.map((shipment, index) => (
+                  <motion.tr
+                    key={shipment.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: index * 0.04 }}
+                    className="hover:bg-muted/30 transition-colors"
+                  >
+                    {/* Tracking */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {shipment.serviceType === "air" ? (
+                          <Plane className="w-4 h-4 text-blue-400 shrink-0" />
+                        ) : (
+                          <Ship className="w-4 h-4 text-cyan-400 shrink-0" />
+                        )}
+                        <Link
+                          href={`/tracking/${shipment.trackingCode}`}
+                          className="text-sm font-mono font-medium text-primary hover:underline"
+                          target="_blank"
+                        >
+                          {shipment.trackingCode}
+                        </Link>
+                      </div>
+                    </td>
+
+                    {/* Cliente */}
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{shipment.customerName}</p>
+                        <p className="text-xs text-muted-foreground">{shipment.phone}</p>
+                      </div>
+                    </td>
+
+                    {/* Estado */}
+                    <td className="px-6 py-4">
+                      <div className="relative">
+                        {updatingStatus === shipment.id ? (
+                          <div className="flex items-center gap-2 px-2.5 py-1.5">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">Guardando...</span>
+                          </div>
+                        ) : (
+                          <select
+                            value={shipment.status}
+                            onChange={(e) => handleStatusChange(shipment, e.target.value as ShipmentStatus)}
+                            className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border cursor-pointer appearance-none transition-colors ${statusConfig[shipment.status].class}`}
+                          >
+                            {statusOptions.map((s) => (
+                              <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Entrega estimada */}
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-muted-foreground">
+                        {shipment.estimatedDelivery || "—"}
+                      </span>
+                    </td>
+
+                    {/* Peso */}
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-foreground">{shipment.weight || "—"}</span>
+                    </td>
+
+                    {/* Destino */}
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-muted-foreground truncate max-w-[150px] block">
+                        {shipment.destination}
+                      </span>
+                    </td>
+
+                    {/* Acciones */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1">
+                        <Link
+                          href={`/tracking/${shipment.trackingCode}`}
+                          className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                          title="Ver tracking público"
+                          target="_blank"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Link>
+                        <button
+                          onClick={() => openEditModal(shipment)}
+                          className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                          title="Editar"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => openDeleteModal(shipment)}
+                          className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-border">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {(currentPage - 1) * itemsPerPage + 1} a{" "}
+                {Math.min(currentPage * itemsPerPage, filteredShipments.length)} de{" "}
+                {filteredShipments.length} envíos
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
+                      currentPage === page
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Create / Edit Modal ─────────────────────────────────────────────── */}
       <AnimatePresence>
         {(showCreateModal || showEditModal) && (
           <motion.div
@@ -457,11 +511,7 @@ export default function EnviosPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => {
-              setShowCreateModal(false)
-              setShowEditModal(false)
-              resetForm()
-            }}
+            onClick={closeModals}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -470,51 +520,47 @@ export default function EnviosPage() {
               className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-border flex items-center justify-between">
+              {/* Modal header */}
+              <div className="p-6 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-xl bg-primary/10">
                     <Package className="w-5 h-5 text-primary" />
                   </div>
-                  <h2 className="text-lg font-semibold text-foreground">
-                    {showCreateModal ? "Crear Nuevo Envío" : "Editar Envío"}
-                  </h2>
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">
+                      {showCreateModal ? "Crear Nuevo Envío" : "Editar Envío"}
+                    </h2>
+                    {showCreateModal && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        El código de seguimiento se generará automáticamente
+                      </p>
+                    )}
+                    {showEditModal && selectedShipment && (
+                      <p className="text-xs text-primary font-mono mt-0.5">
+                        {selectedShipment.trackingCode}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <button
-                  onClick={() => {
-                    setShowCreateModal(false)
-                    setShowEditModal(false)
-                    resetForm()
-                  }}
+                  onClick={closeModals}
                   className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
+              {/* Modal body */}
               <div className="p-6 space-y-4">
-                {showEditModal && (
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Código Tracking
-                    </label>
-                    <input
-                      type="text"
-                      value={selectedShipment?.id || ""}
-                      disabled
-                      className="w-full px-4 py-2.5 bg-muted border border-border rounded-xl text-sm text-muted-foreground"
-                    />
-                  </div>
-                )}
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Nombre del Cliente *
+                      Nombre del Cliente <span className="text-destructive">*</span>
                     </label>
                     <input
                       type="text"
-                      value={formData.client}
-                      onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+                      value={formData.customerName}
+                      onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
                       placeholder="Ej: María García"
                       className="w-full px-4 py-2.5 bg-input border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                     />
@@ -522,7 +568,7 @@ export default function EnviosPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Teléfono *
+                      Teléfono <span className="text-destructive">*</span>
                     </label>
                     <input
                       type="text"
@@ -535,7 +581,7 @@ export default function EnviosPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Peso *
+                      Peso
                     </label>
                     <input
                       type="text"
@@ -548,7 +594,7 @@ export default function EnviosPage() {
 
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Dirección de Entrega *
+                      Dirección de Entrega
                     </label>
                     <input
                       type="text"
@@ -561,7 +607,7 @@ export default function EnviosPage() {
 
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Ciudad de Destino *
+                      Ciudad de Destino <span className="text-destructive">*</span>
                     </label>
                     <input
                       type="text"
@@ -573,35 +619,27 @@ export default function EnviosPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Estado
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Estado</label>
                     <select
                       value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value as ShipmentStatus })}
                       className="w-full px-4 py-2.5 bg-input border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                     >
-                      {statusOptions.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
+                      {statusOptions.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Tipo de Envío
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Tipo de Envío</label>
                     <select
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                      value={formData.serviceType}
+                      onChange={(e) => setFormData({ ...formData, serviceType: e.target.value as "air" | "sea" })}
                       className="w-full px-4 py-2.5 bg-input border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                     >
-                      {typeOptions.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
+                      {typeOptions.map((t) => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
                       ))}
                     </select>
                   </div>
@@ -612,32 +650,39 @@ export default function EnviosPage() {
                     </label>
                     <input
                       type="date"
-                      value={formData.estimatedDate}
-                      onChange={(e) => setFormData({ ...formData, estimatedDate: e.target.value })}
+                      value={formData.estimatedDelivery}
+                      onChange={(e) => setFormData({ ...formData, estimatedDelivery: e.target.value })}
                       className="w-full px-4 py-2.5 bg-input border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Modal footer */}
               <div className="p-6 border-t border-border flex items-center justify-end gap-3">
                 <button
-                  onClick={() => {
-                    setShowCreateModal(false)
-                    setShowEditModal(false)
-                    resetForm()
-                  }}
-                  className="px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+                  onClick={closeModals}
+                  disabled={submitting}
+                  className="px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={showCreateModal ? handleCreateShipment : handleEditShipment}
-                  disabled={!formData.client || !formData.phone || !formData.address}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!formData.customerName || !formData.phone || !formData.destination || submitting}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px] justify-center"
                 >
-                  <Check className="w-4 h-4" />
-                  {showCreateModal ? "Crear Envío" : "Guardar Cambios"}
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {showCreateModal ? "Creando..." : "Guardando..."}
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      {showCreateModal ? "Crear Envío" : "Guardar Cambios"}
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -645,7 +690,7 @@ export default function EnviosPage() {
         )}
       </AnimatePresence>
 
-      {/* Delete confirmation modal */}
+      {/* ── Delete Confirmation Modal ───────────────────────────────────────── */}
       <AnimatePresence>
         {showDeleteModal && selectedShipment && (
           <motion.div
@@ -674,23 +719,34 @@ export default function EnviosPage() {
 
               <p className="text-sm text-muted-foreground mb-6">
                 ¿Estás seguro que deseas eliminar el envío{" "}
-                <span className="font-mono text-foreground">{selectedShipment.id}</span> del cliente{" "}
-                <span className="text-foreground">{selectedShipment.client}</span>?
+                <span className="font-mono text-foreground">{selectedShipment.trackingCode}</span> del cliente{" "}
+                <span className="text-foreground">{selectedShipment.customerName}</span>?
               </p>
 
               <div className="flex items-center justify-end gap-3">
                 <button
                   onClick={() => setShowDeleteModal(false)}
-                  className="px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+                  disabled={submitting}
+                  className="px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleDeleteShipment}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-destructive text-destructive-foreground rounded-xl font-medium text-sm hover:bg-destructive/90 transition-colors"
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-destructive text-destructive-foreground rounded-xl font-medium text-sm hover:bg-destructive/90 transition-colors disabled:opacity-50 min-w-[120px] justify-center"
                 >
-                  <Trash2 className="w-4 h-4" />
-                  Eliminar
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Eliminando...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Eliminar
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>

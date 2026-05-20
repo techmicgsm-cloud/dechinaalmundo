@@ -5,6 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
+import { Toaster } from "sonner"
 import {
   LayoutDashboard,
   Package,
@@ -198,6 +199,16 @@ export default function AdminLayout({
           {children}
         </main>
       </div>
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: "hsl(var(--card))",
+            border: "1px solid hsl(var(--border))",
+            color: "hsl(var(--foreground))",
+          },
+        }}
+      />
     </div>
   )
 }

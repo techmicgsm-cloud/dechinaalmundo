@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { getTrackingInfo, getStatusColor, type TrackingInfo } from "@/lib/tracking-data"
+import { getShipmentByTrackingCode, type Shipment } from "@/lib/shipments"
 import { Header } from "@/components/header"
 
 function getEventIcon(status: string): React.ComponentType<{ className?: string }> {
@@ -575,6 +576,91 @@ function EnhancedTimeline({ trackingInfo }: { trackingInfo: TrackingInfo }) {
   )
 }
 
+// ─── Firestore → TrackingInfo mappers ─────────────────────────────────────────
+
+function mapFirestoreStatus(status: string): TrackingInfo["status"] {
+  const map: Record<string, TrackingInfo["status"]> = {
+    pendiente:   "pending",
+    en_transito: "in_transit",
+    en_aduana:   "customs",
+    entregado:   "delivered",
+  }
+  return map[status] ?? "pending"
+}
+
+function getStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    pendiente:   "Pendiente",
+    en_transito: "En tránsito",
+    en_aduana:   "En aduana",
+    entregado:   "Entregado",
+  }
+  return map[status] ?? "Pendiente"
+}
+
+function getProgressFromStatus(status: string): number {
+  const map: Record<string, number> = {
+    pendiente:   10,
+    en_transito: 65,
+    en_aduana:   80,
+    entregado:   100,
+  }
+  return map[status] ?? 10
+}
+
+function generateEventsFromStatus(status: string, destination: string) {
+  const now = new Date()
+  const fmt = (d: Date) =>
+    d.toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" }) +
+    " - " +
+    d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+
+  const d = (daysAgo: number) => {
+    const dt = new Date(now)
+    dt.setDate(dt.getDate() - daysAgo)
+    return dt
+  }
+
+  const allEvents = [
+    {
+      id: 1,
+      status: "Paquete recibido en almacén",
+      location: "China",
+      date: fmt(d(7)),
+      description: "Tu paquete ha sido recibido en nuestro almacén y está siendo preparado para envío.",
+      completed: true,
+    },
+    {
+      id: 2,
+      status: "En tránsito internacional",
+      location: "China → Destino",
+      date: fmt(d(5)),
+      description: "El paquete está en camino hacia su destino.",
+      completed: status !== "pendiente",
+      current: status === "en_transito",
+    },
+    {
+      id: 3,
+      status: "En proceso de aduana",
+      location: destination,
+      date: fmt(d(2)),
+      description: "Tu paquete está siendo procesado en aduana.",
+      completed: status === "entregado" || status === "en_aduana",
+      current: status === "en_aduana",
+    },
+    {
+      id: 4,
+      status: "Entregado",
+      location: destination,
+      date: status === "entregado" ? fmt(d(0)) : "Estimado próximamente",
+      description: "Tu paquete ha sido entregado exitosamente.",
+      completed: status === "entregado",
+    },
+  ]
+
+  return allEvents
+}
+
 export default function TrackingPage() {
   const params = useParams()
   const router = useRouter()
@@ -588,8 +674,37 @@ export default function TrackingPage() {
   useEffect(() => {
     setLoading(true)
     setNotFound(false)
-    
-    const timer = setTimeout(() => {
+    setTrackingInfo(null)
+
+    const fetchTracking = async () => {
+      // 1. Try Firestore (real shipments from admin panel)
+      try {
+        const firestoreShipment = await getShipmentByTrackingCode(code)
+        if (firestoreShipment) {
+          // Map Firestore Shipment to TrackingInfo format
+          const mappedInfo: TrackingInfo = {
+            trackingNumber: firestoreShipment.trackingCode,
+            status: mapFirestoreStatus(firestoreShipment.status),
+            statusLabel: getStatusLabel(firestoreShipment.status),
+            origin: "China",
+            destination: firestoreShipment.destination,
+            estimatedDelivery: firestoreShipment.estimatedDelivery || "Por confirmar",
+            weight: firestoreShipment.weight || "Por confirmar",
+            dimensions: "Por confirmar",
+            shippingType: firestoreShipment.serviceType === "air" ? "Express Aéreo" : "Marítimo Express",
+            insurance: "Incluido",
+            progress: getProgressFromStatus(firestoreShipment.status),
+            events: generateEventsFromStatus(firestoreShipment.status, firestoreShipment.destination),
+          }
+          setTrackingInfo(mappedInfo)
+          setLoading(false)
+          return
+        }
+      } catch (err) {
+        console.warn("Firestore lookup failed, falling back to demo data:", err)
+      }
+
+      // 2. Fall back to static demo data (DCM-DEMO01, DCM-AR2401, CN-TRACK01)
       const info = getTrackingInfo(code)
       if (info) {
         setTrackingInfo(info)
@@ -597,9 +712,9 @@ export default function TrackingPage() {
         setNotFound(true)
       }
       setLoading(false)
-    }, 800)
+    }
 
-    return () => clearTimeout(timer)
+    fetchTracking()
   }, [code])
 
   const handleSearch = (e: React.FormEvent) => {
