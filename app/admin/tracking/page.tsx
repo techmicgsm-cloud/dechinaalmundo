@@ -19,7 +19,7 @@ import Link from "next/link"
 
 const activeShipments = [
   {
-    id: "DCM-2024-X8K9P2",
+    id: "DCM-DEMO01",
     client: "María García",
     status: "en_transito",
     progress: 75,
@@ -30,7 +30,7 @@ const activeShipments = [
     type: "air",
   },
   {
-    id: "DCM-2024-Z1P8Q4",
+    id: "CN-TRACK01",
     client: "Ana Martínez",
     status: "en_aduana",
     progress: 85,
@@ -41,7 +41,7 @@ const activeShipments = [
     type: "air",
   },
   {
-    id: "DCM-2024-V3K7L1",
+    id: "DCM-LP2401",
     client: "Laura Fernández",
     status: "en_transito",
     progress: 45,
@@ -52,7 +52,7 @@ const activeShipments = [
     type: "sea",
   },
   {
-    id: "DCM-2024-U9J4M6",
+    id: "DCM-BA2401",
     client: "Diego Ramírez",
     status: "en_transito",
     progress: 90,

@@ -100,7 +100,7 @@ export function TrackingPreview() {
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Número de seguimiento</p>
-                  <p className="text-xl md:text-2xl font-mono font-bold text-foreground">DCM-2024-X8K9P2</p>
+                  <p className="text-xl md:text-2xl font-mono font-bold text-foreground">DCM-DEMO01</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full">

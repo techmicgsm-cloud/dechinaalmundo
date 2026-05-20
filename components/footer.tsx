@@ -144,7 +144,7 @@ export function Footer() {
               {[
                 { name: "Sobre Nosotros", href: "/#sobre-nosotros" },
                 { name: "Cómo Funciona", href: "/#como-funciona" },
-                { name: "Rastrear Envío", href: "/tracking/DCM-2024-X8K9P2" },
+                { name: "Rastrear Envío", href: "/tracking/DCM-DEMO01" },
                 { name: "Preguntas Frecuentes", href: "/#faq" },
                 { name: "Términos y Condiciones", href: "/terminos" }
               ].map((link) => (

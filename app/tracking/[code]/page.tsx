@@ -692,17 +692,17 @@ export default function TrackingPage() {
                   <span className="font-mono text-foreground bg-secondary px-2 py-1 rounded">{code}</span>. 
                   Por favor verificá que el código sea correcto.
                 </p>
-                <div className="p-6 bg-card border border-border rounded-2xl mb-8">
-                  <p className="text-sm text-muted-foreground mb-4">Códigos de ejemplo para probar:</p>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {["DCM-2024-X8K9P2", "DCM-2024-Y7M3N5", "DCM-2024-Z1P8Q4"].map((exampleCode) => (
+                <div className="p-6 bg-card border border-border rounded-2xl mb-8 shadow-sm">
+                  <p className="text-sm font-medium text-muted-foreground mb-4">Seguimientos de demostración:</p>
+                  <div className="flex flex-wrap gap-3 justify-center">
+                    {["DCM-DEMO01", "DCM-AR2401", "CN-TRACK01"].map((demoCode) => (
                       <Link
-                        key={exampleCode}
-                        href={`/tracking/${exampleCode}`}
-                        className="group px-4 py-2 bg-secondary text-sm font-mono text-foreground rounded-xl hover:bg-primary hover:text-primary-foreground transition-all flex items-center gap-2"
+                        key={demoCode}
+                        href={`/tracking/${demoCode}`}
+                        className="group px-5 py-2.5 bg-secondary text-sm font-mono font-medium text-foreground rounded-xl hover:bg-primary hover:text-primary-foreground hover:scale-105 hover:shadow-lg hover:shadow-primary/25 transition-all duration-300 flex items-center gap-2 border border-border hover:border-primary/50"
                       >
-                        {exampleCode}
-                        <ChevronRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                        {demoCode}
+                        <ChevronRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" />
                       </Link>
                     ))}
                   </div>

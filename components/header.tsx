@@ -36,7 +36,7 @@ export function Header() {
             <Link href="/#servicios" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Servicios
             </Link>
-            <Link href="/tracking/DCM-2024-X8K9P2" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/tracking/DCM-DEMO01" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Rastrear Envío
             </Link>
             <Link href="/#contacto" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -47,7 +47,7 @@ export function Header() {
           {/* CTA Button */}
           <div className="hidden md:block">
             <Link
-              href="/tracking/DCM-2024-X8K9P2"
+              href="/tracking/DCM-DEMO01"
               className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors"
             >
               Rastrear Envío
@@ -80,7 +80,7 @@ export function Header() {
               Servicios
             </Link>
             <Link
-              href="/tracking/DCM-2024-X8K9P2"
+              href="/tracking/DCM-DEMO01"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
@@ -94,7 +94,7 @@ export function Header() {
               Contacto
             </Link>
             <Link
-              href="/tracking/DCM-2024-X8K9P2"
+              href="/tracking/DCM-DEMO01"
               className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm text-center hover:bg-primary/90 transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >

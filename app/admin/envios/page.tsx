@@ -21,10 +21,10 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 
-// Mock shipments data
+// Shipments data
 const initialShipments = [
   {
-    id: "DCM-2024-X8K9P2",
+    id: "DCM-DEMO01",
     client: "María García",
     phone: "+54 9 11 1234-5678",
     address: "Av. Corrientes 1234, Buenos Aires",
@@ -36,7 +36,7 @@ const initialShipments = [
     destination: "Buenos Aires, Argentina",
   },
   {
-    id: "DCM-2024-Y7M3N5",
+    id: "DCM-AR2401",
     client: "Carlos López",
     phone: "+54 9 351 234-5678",
     address: "San Martín 567, Córdoba",
@@ -48,7 +48,7 @@ const initialShipments = [
     destination: "Córdoba, Argentina",
   },
   {
-    id: "DCM-2024-Z1P8Q4",
+    id: "CN-TRACK01",
     client: "Ana Martínez",
     phone: "+54 9 261 345-6789",
     address: "Las Heras 890, Mendoza",
@@ -60,7 +60,7 @@ const initialShipments = [
     destination: "Mendoza, Argentina",
   },
   {
-    id: "DCM-2024-W5R2T8",
+    id: "DCM-RS2401",
     client: "Roberto Sánchez",
     phone: "+54 9 341 456-7890",
     address: "Pellegrini 123, Rosario",
@@ -72,7 +72,7 @@ const initialShipments = [
     destination: "Rosario, Argentina",
   },
   {
-    id: "DCM-2024-V3K7L1",
+    id: "DCM-LP2401",
     client: "Laura Fernández",
     phone: "+54 9 221 567-8901",
     address: "Calle 7 456, La Plata",
@@ -84,7 +84,7 @@ const initialShipments = [
     destination: "La Plata, Argentina",
   },
   {
-    id: "DCM-2024-U9J4M6",
+    id: "DCM-BA2401",
     client: "Diego Ramírez",
     phone: "+54 9 11 678-9012",
     address: "Florida 789, Buenos Aires",
@@ -159,11 +159,12 @@ export default function EnviosPage() {
 
   const generateTrackingCode = () => {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    let code = "DCM-2024-"
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length))
+    const year = new Date().getFullYear().toString().slice(-2)
+    let suffix = ""
+    for (let i = 0; i < 4; i++) {
+      suffix += chars.charAt(Math.floor(Math.random() * chars.length))
     }
-    return code
+    return `DCM-${suffix}${year}`
   }
 
   const handleCreateShipment = () => {

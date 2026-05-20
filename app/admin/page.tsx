@@ -20,7 +20,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 
-// Mock data for dashboard
+// Dashboard data
 const stats = [
   {
     name: "Total Envíos",
@@ -58,7 +58,7 @@ const stats = [
 
 const recentShipments = [
   {
-    id: "DCM-2024-X8K9P2",
+    id: "DCM-DEMO01",
     client: "María García",
     status: "en_transito",
     origin: "Shanghai, China",
@@ -67,7 +67,7 @@ const recentShipments = [
     type: "air",
   },
   {
-    id: "DCM-2024-Y7M3N5",
+    id: "DCM-AR2401",
     client: "Carlos López",
     status: "entregado",
     origin: "Shenzhen, China",
@@ -76,7 +76,7 @@ const recentShipments = [
     type: "sea",
   },
   {
-    id: "DCM-2024-Z1P8Q4",
+    id: "CN-TRACK01",
     client: "Ana Martínez",
     status: "en_aduana",
     origin: "Guangzhou, China",
@@ -85,7 +85,7 @@ const recentShipments = [
     type: "air",
   },
   {
-    id: "DCM-2024-W5R2T8",
+    id: "DCM-RS2401",
     client: "Roberto Sánchez",
     status: "pendiente",
     origin: "Beijing, China",
@@ -94,7 +94,7 @@ const recentShipments = [
     type: "sea",
   },
   {
-    id: "DCM-2024-V3K7L1",
+    id: "DCM-LP2401",
     client: "Laura Fernández",
     status: "en_transito",
     origin: "Shanghai, China",
@@ -108,19 +108,19 @@ const recentActivity = [
   {
     id: 1,
     action: "Nuevo envío creado",
-    shipment: "DCM-2024-X8K9P2",
+    shipment: "DCM-DEMO01",
     time: "Hace 2 horas",
   },
   {
     id: 2,
     action: "Estado actualizado a En Tránsito",
-    shipment: "DCM-2024-Y7M3N5",
+    shipment: "DCM-AR2401",
     time: "Hace 4 horas",
   },
   {
     id: 3,
     action: "Envío entregado",
-    shipment: "DCM-2024-Z1P8Q4",
+    shipment: "CN-TRACK01",
     time: "Hace 6 horas",
   },
   {

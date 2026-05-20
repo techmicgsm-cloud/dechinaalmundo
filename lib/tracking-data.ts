@@ -26,8 +26,8 @@ export interface TrackingInfo {
 
 // Simulated tracking data - in a real app this would come from a database
 const trackingDatabase: Record<string, TrackingInfo> = {
-  "DCM-2024-X8K9P2": {
-    trackingNumber: "DCM-2024-X8K9P2",
+  "DCM-DEMO01": {
+    trackingNumber: "DCM-DEMO01",
     status: "in_transit",
     statusLabel: "En tránsito",
     origin: "Shenzhen, China",
@@ -106,8 +106,8 @@ const trackingDatabase: Record<string, TrackingInfo> = {
       },
     ],
   },
-  "DCM-2024-Y7M3N5": {
-    trackingNumber: "DCM-2024-Y7M3N5",
+  "DCM-AR2401": {
+    trackingNumber: "DCM-AR2401",
     status: "delivered",
     statusLabel: "Entregado",
     origin: "Guangzhou, China",
@@ -161,8 +161,8 @@ const trackingDatabase: Record<string, TrackingInfo> = {
       },
     ],
   },
-  "DCM-2024-Z1P8Q4": {
-    trackingNumber: "DCM-2024-Z1P8Q4",
+  "CN-TRACK01": {
+    trackingNumber: "CN-TRACK01",
     status: "customs",
     statusLabel: "En aduana",
     origin: "Shanghai, China",
