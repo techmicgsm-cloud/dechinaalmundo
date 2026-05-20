@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
@@ -18,7 +19,10 @@ import {
   Bell,
   Search,
   ChevronDown,
+  Loader2,
 } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
+import { signOut } from "@/lib/auth"
 
 const sidebarItems = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -33,9 +37,51 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen,  setSidebarOpen]  = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const pathname = usePathname()
+  const [signingOut,   setSigningOut]   = useState(false)
+  const pathname   = usePathname()
+  const router     = useRouter()
+  const { user, loading: authLoading, isAuthenticated } = useAuth()
+
+  // ── Auth guard: redirect to /login if not authenticated ──────────────────
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="w-14 h-14 border-4 border-primary/20 rounded-full" />
+            <div className="absolute inset-0 w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <Package className="absolute inset-0 m-auto w-5 h-5 text-primary" />
+          </div>
+          <p className="text-muted-foreground text-sm">Verificando acceso...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    // Redirect via router — useEffect not needed because this is render-time
+    if (typeof window !== "undefined") {
+      router.replace("/login")
+    }
+    return null
+  }
+
+  // ── Logout handler ────────────────────────────────────────────────────────
+  const handleSignOut = async () => {
+    setSigningOut(true)
+    try {
+      await signOut()
+      router.replace("/login")
+    } catch {
+      setSigningOut(false)
+    }
+  }
+
+  // Derive display info from Firebase user
+  const userEmail    = user?.email ?? "admin@dechinaalmundo.com"
+  const userInitial  = userEmail.charAt(0).toUpperCase()
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -105,15 +151,24 @@ export default function AdminLayout({
           {/* User section */}
           <div className="p-4 border-t border-sidebar-border">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-sidebar-accent/50">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-                A
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold shrink-0">
+                {userInitial}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-sidebar-foreground truncate">Administrador</p>
-                <p className="text-xs text-muted-foreground truncate">admin@dechinaalmundo.com</p>
+                <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
               </div>
-              <button className="p-2 text-muted-foreground hover:text-sidebar-foreground transition-colors">
-                <LogOut className="w-4 h-4" />
+              <button
+                onClick={handleSignOut}
+                disabled={signingOut}
+                title="Cerrar sesión"
+                className="p-2 text-muted-foreground hover:text-sidebar-foreground transition-colors disabled:opacity-50"
+              >
+                {signingOut ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
@@ -160,7 +215,7 @@ export default function AdminLayout({
                   className="flex items-center gap-2 p-2 rounded-xl hover:bg-muted transition-colors"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                    A
+                    {userInitial}
                   </div>
                   <ChevronDown className="w-4 h-4 text-muted-foreground hidden sm:block" />
                 </button>
@@ -181,8 +236,16 @@ export default function AdminLayout({
                           <Settings className="w-4 h-4" />
                           Configuración
                         </Link>
-                        <button className="flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-colors w-full">
-                          <LogOut className="w-4 h-4" />
+                        <button
+                          onClick={handleSignOut}
+                          disabled={signingOut}
+                          className="flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-colors w-full disabled:opacity-50"
+                        >
+                          {signingOut ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <LogOut className="w-4 h-4" />
+                          )}
                           Cerrar sesión
                         </button>
                       </div>

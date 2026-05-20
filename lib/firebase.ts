@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getAuth, Auth } from 'firebase/auth';
 
 // 1. La configuración será inyectada aquí. Usamos variables de entorno por seguridad,
 // pero por ahora preparamos la estructura a la espera de los valores.
@@ -20,6 +21,8 @@ const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : get
 // 3. Configurar servicios exportados
 const db: Firestore = getFirestore(app);
 const storage: FirebaseStorage = getStorage(app);
+const auth: Auth = getAuth(app);
 
 // Exportamos los servicios para que puedan ser usados a lo largo de toda la app
-export { app, db, storage };
+export { app, db, storage, auth };
+
