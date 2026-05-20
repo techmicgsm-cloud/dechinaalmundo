@@ -20,6 +20,9 @@ import {
   RefreshCw,
   Loader2,
   WifiOff,
+  UploadCloud,
+  ImageIcon,
+  FileText,
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -29,10 +32,13 @@ import {
   updateShipmentStatus,
   updateShipment,
   deleteShipment,
+  addShipmentAttachments,
+  removeShipmentAttachment,
   type Shipment,
   type ShipmentStatus,
   type CreateShipmentData,
 } from "@/lib/shipments"
+import { uploadShipmentFiles, deleteStorageFile, validateFile, type Attachment } from "@/lib/storage"
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -82,6 +88,8 @@ export default function EnviosPage() {
   const [selectedShipment,setSelectedShipment]= useState<Shipment | null>(null)
   const [currentPage,     setCurrentPage]     = useState(1)
   const [formData,        setFormData]        = useState<CreateShipmentData>(emptyForm)
+  const [filesToUpload,   setFilesToUpload]   = useState<File[]>([])
+  const [uploadProgress,  setUploadProgress]  = useState<Record<string, number>>({})
   const [submitting,      setSubmitting]      = useState(false)
   const [updatingStatus,  setUpdatingStatus]  = useState<string | null>(null) // shipment id being updated
   const itemsPerPage = 8
@@ -133,12 +141,22 @@ export default function EnviosPage() {
     if (!formData.customerName || !formData.phone || !formData.destination) return
     setSubmitting(true)
     try {
-      const trackingCode = await createShipment(formData)
+      const { trackingCode, docId } = await createShipment(formData)
+
+      // Upload files if any
+      if (filesToUpload.length > 0) {
+        const uploadedAttachments = await uploadShipmentFiles(docId, filesToUpload, (index, pct) => {
+          setUploadProgress(prev => ({ ...prev, [filesToUpload[index].name]: pct }))
+        })
+        if (uploadedAttachments.length > 0) {
+          await addShipmentAttachments(docId, uploadedAttachments)
+        }
+      }
+
       toast.success(`Envío creado exitosamente`, {
         description: `Código de seguimiento: ${trackingCode}`,
       })
-      setShowCreateModal(false)
-      setFormData(emptyForm)
+      closeModals()
     } catch (err) {
       console.error(err)
       toast.error("Error al crear el envío", {
@@ -154,15 +172,45 @@ export default function EnviosPage() {
     setSubmitting(true)
     try {
       await updateShipment(selectedShipment.id, formData)
+
+      // Upload new files if any
+      if (filesToUpload.length > 0) {
+        const uploadedAttachments = await uploadShipmentFiles(selectedShipment.id, filesToUpload, (index, pct) => {
+          setUploadProgress(prev => ({ ...prev, [filesToUpload[index].name]: pct }))
+        })
+        if (uploadedAttachments.length > 0) {
+          await addShipmentAttachments(selectedShipment.id, uploadedAttachments)
+        }
+      }
+
       toast.success("Envío actualizado correctamente")
-      setShowEditModal(false)
-      setSelectedShipment(null)
-      setFormData(emptyForm)
+      closeModals()
     } catch (err) {
       console.error(err)
       toast.error("Error al actualizar el envío")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleDeleteExistingFile = async (attachment: Attachment) => {
+    if (!selectedShipment) return
+    try {
+      await deleteStorageFile(attachment.path)
+      await removeShipmentAttachment(selectedShipment.id, attachment)
+      // Actualizar vista local
+      setSelectedShipment({
+        ...selectedShipment,
+        attachments: selectedShipment.attachments.filter(a => a.path !== attachment.path)
+      })
+      setShipments(shipments.map(s => s.id === selectedShipment.id ? {
+        ...s,
+        attachments: s.attachments.filter(a => a.path !== attachment.path)
+      } : s))
+      toast.success("Archivo eliminado")
+    } catch (err) {
+      console.error(err)
+      toast.error("Error al eliminar el archivo")
     }
   }
 
@@ -221,6 +269,8 @@ export default function EnviosPage() {
     setShowDeleteModal(false)
     setSelectedShipment(null)
     setFormData(emptyForm)
+    setFilesToUpload([])
+    setUploadProgress({})
   }
 
   // ── Loading state ──────────────────────────────────────────────────────────
@@ -654,6 +704,109 @@ export default function EnviosPage() {
                       onChange={(e) => setFormData({ ...formData, estimatedDelivery: e.target.value })}
                       className="w-full px-4 py-2.5 bg-input border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                     />
+                  </div>
+
+                  {/* ── File Upload Section ────────────────────────────────────────── */}
+                  <div className="col-span-2 pt-4 border-t border-border">
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Documentos e Imágenes
+                    </label>
+                    <div className="relative border-2 border-dashed border-border rounded-xl p-6 text-center hover:bg-muted/30 transition-colors">
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                        onChange={(e) => {
+                          if (e.target.files) {
+                            const newFiles = Array.from(e.target.files)
+                            const validFiles: File[] = []
+                            newFiles.forEach(f => {
+                              const error = validateFile(f)
+                              if (error) toast.error(error)
+                              else validFiles.push(f)
+                            })
+                            setFilesToUpload(prev => [...prev, ...validFiles])
+                          }
+                          // clear input so same file can be selected again
+                          e.target.value = ""
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <UploadCloud className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-sm font-medium text-foreground">
+                        Arrastra archivos o haz clic para subir
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        JPG, PNG, WEBP, GIF o PDF. Max 15MB.
+                      </p>
+                    </div>
+
+                    {/* Pending files */}
+                    {filesToUpload.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        {filesToUpload.map((file, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-3 bg-secondary rounded-xl border border-border">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              {file.type.startsWith("image/") ? (
+                                <ImageIcon className="w-5 h-5 text-primary shrink-0" />
+                              ) : (
+                                <FileText className="w-5 h-5 text-primary shrink-0" />
+                              )}
+                              <div className="truncate">
+                                <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+                                <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              {uploadProgress[file.name] !== undefined && (
+                                <span className="text-xs font-mono text-primary">{uploadProgress[file.name]}%</span>
+                              )}
+                              <button
+                                onClick={() => setFilesToUpload(prev => prev.filter((_, i) => i !== idx))}
+                                disabled={submitting}
+                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Existing files (only in Edit mode) */}
+                    {showEditModal && selectedShipment?.attachments && selectedShipment.attachments.length > 0 && (
+                      <div className="mt-6">
+                        <p className="text-sm font-medium text-foreground mb-3">Archivos subidos previamente</p>
+                        <div className="space-y-2">
+                          {selectedShipment.attachments.map((attachment, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border">
+                              <div className="flex items-center gap-3 overflow-hidden">
+                                {attachment.type.startsWith("image/") ? (
+                                  <ImageIcon className="w-5 h-5 text-muted-foreground shrink-0" />
+                                ) : (
+                                  <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
+                                )}
+                                <div className="truncate">
+                                  <a href={attachment.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary hover:underline truncate">
+                                    {attachment.name}
+                                  </a>
+                                  <p className="text-xs text-muted-foreground">{(attachment.size / 1024 / 1024).toFixed(2)} MB</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleDeleteExistingFile(attachment)}
+                                disabled={submitting}
+                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                                title="Eliminar archivo permanentemente"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

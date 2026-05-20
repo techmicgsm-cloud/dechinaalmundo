@@ -695,6 +695,7 @@ export default function TrackingPage() {
             insurance: "Incluido",
             progress: getProgressFromStatus(firestoreShipment.status),
             events: generateEventsFromStatus(firestoreShipment.status, firestoreShipment.destination),
+            attachments: firestoreShipment.attachments || [],
           }
           setTrackingInfo(mappedInfo)
           setLoading(false)
@@ -884,6 +885,55 @@ export default function TrackingPage() {
                   <PackageInfoCard trackingInfo={trackingInfo} />
                 </div>
               </div>
+
+              {/* Attachments Gallery */}
+              {trackingInfo.attachments && trackingInfo.attachments.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.55 }}
+                  className="mb-6 bg-card border border-border rounded-2xl p-6"
+                >
+                  <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+                    <FileSearch className="w-5 h-5 text-primary" />
+                    Documentos e Imágenes
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {trackingInfo.attachments.map((file, idx) => {
+                      const isImage = file.type.startsWith("image/")
+                      return (
+                        <a
+                          key={idx}
+                          href={file.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group relative block aspect-square rounded-xl overflow-hidden border border-border bg-secondary hover:border-primary/50 transition-colors"
+                        >
+                          {isImage ? (
+                            <img
+                              src={file.url}
+                              alt={file.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center w-full h-full p-4">
+                              <FileSearch className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
+                              <span className="text-xs font-medium text-center truncate w-full px-2 text-muted-foreground group-hover:text-foreground">
+                                {file.name}
+                              </span>
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="bg-background/80 text-foreground text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
+                              Ver archivo
+                            </span>
+                          </div>
+                        </a>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              )}
 
               {/* Timeline */}
               <EnhancedTimeline trackingInfo={trackingInfo} />

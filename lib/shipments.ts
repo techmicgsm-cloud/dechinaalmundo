@@ -10,9 +10,12 @@ import {
   serverTimestamp,
   runTransaction,
   getDoc,
+  arrayUnion,
+  arrayRemove,
   Timestamp,
 } from "firebase/firestore"
 import { db } from "./firebase"
+import type { Attachment } from "./storage"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +38,7 @@ export interface Shipment {
   estimatedDelivery: string
   weight: string
   serviceType: ServiceType
+  attachments: Attachment[]
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
 }
@@ -110,6 +114,7 @@ export function subscribeShipments(
           estimatedDelivery: data.estimatedDelivery ?? "",
           weight: data.weight ?? "",
           serviceType: (data.serviceType as ServiceType) ?? "air",
+          attachments: (data.attachments as Attachment[]) ?? [],
           createdAt: data.createdAt ?? null,
           updatedAt: data.updatedAt ?? null,
         }
@@ -128,18 +133,23 @@ export function subscribeShipments(
 
 /**
  * Creates a new shipment in Firestore with an auto-generated tracking code.
+ * Returns both the trackingCode AND the Firestore document ID
+ * (the doc ID is needed by the file uploader to build the Storage path).
  */
-export async function createShipment(data: CreateShipmentData): Promise<string> {
+export async function createShipment(
+  data: CreateShipmentData
+): Promise<{ trackingCode: string; docId: string }> {
   const trackingCode = await generateTrackingCode()
 
   const docRef = await addDoc(collection(db, "shipments"), {
     ...data,
     trackingCode,
+    attachments: [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
 
-  return trackingCode
+  return { trackingCode, docId: docRef.id }
 }
 
 /**
@@ -178,6 +188,34 @@ export async function deleteShipment(id: string): Promise<void> {
 }
 
 /**
+ * Appends new attachments to a shipment's attachments array in Firestore.
+ */
+export async function addShipmentAttachments(
+  id: string,
+  attachments: Attachment[]
+): Promise<void> {
+  const shipmentRef = doc(db, "shipments", id)
+  await updateDoc(shipmentRef, {
+    attachments: arrayUnion(...attachments),
+    updatedAt:   serverTimestamp(),
+  })
+}
+
+/**
+ * Removes a single attachment from the Firestore array by matching its path.
+ */
+export async function removeShipmentAttachment(
+  id: string,
+  attachment: Attachment
+): Promise<void> {
+  const shipmentRef = doc(db, "shipments", id)
+  await updateDoc(shipmentRef, {
+    attachments: arrayRemove(attachment),
+    updatedAt:   serverTimestamp(),
+  })
+}
+
+/**
  * Looks up a shipment by its trackingCode (case-insensitive).
  * Returns null if not found.
  */
@@ -209,6 +247,7 @@ export async function getShipmentByTrackingCode(
     estimatedDelivery: data.estimatedDelivery ?? "",
     weight: data.weight ?? "",
     serviceType: (data.serviceType as ServiceType) ?? "air",
+    attachments: (data.attachments as Attachment[]) ?? [],
     createdAt: data.createdAt ?? null,
     updatedAt: data.updatedAt ?? null,
   }

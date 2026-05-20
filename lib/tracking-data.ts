@@ -22,6 +22,7 @@ export interface TrackingInfo {
   insurance: string
   progress: number
   events: TrackingEvent[]
+  attachments?: { url: string; name: string; type: string }[]
 }
 
 // Simulated tracking data - in a real app this would come from a database
