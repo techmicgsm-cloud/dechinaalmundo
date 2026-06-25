@@ -1,25 +1,23 @@
-import {
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  type User,
-} from "firebase/auth"
-import { auth } from "./firebase"
+import { type User } from "@supabase/supabase-js"
+import { supabase } from "./supabase"
 
 /**
- * Sign in with email and password using Firebase Auth.
+ * Sign in with email and password using Supabase Auth.
  * Throws a typed error that can be shown in the UI.
  */
 export async function signIn(email: string, password: string): Promise<User> {
-  const credential = await signInWithEmailAndPassword(auth, email, password)
-  return credential.user
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) throw error
+  if (!data.user) throw new Error("User not found")
+  return data.user
 }
 
 /**
  * Sign out the current user.
  */
 export async function signOut(): Promise<void> {
-  await firebaseSignOut(auth)
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
 }
 
 /**
@@ -27,21 +25,21 @@ export async function signOut(): Promise<void> {
  * Returns an unsubscribe function.
  */
 export function onAuthChange(callback: (user: User | null) => void): () => void {
-  return onAuthStateChanged(auth, callback)
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    callback(session?.user ?? null)
+  })
+  return () => {
+    subscription.unsubscribe()
+  }
 }
 
 /**
- * Maps Firebase Auth error codes to user-friendly Spanish messages.
+ * Maps Supabase Auth error codes to user-friendly Spanish messages.
  */
 export function getAuthErrorMessage(code: string): string {
   const messages: Record<string, string> = {
-    "auth/invalid-email":          "El correo electrónico no es válido.",
-    "auth/user-not-found":         "No existe una cuenta con ese correo.",
-    "auth/wrong-password":         "Contraseña incorrecta. Intentá de nuevo.",
-    "auth/invalid-credential":     "Correo o contraseña incorrectos.",
-    "auth/too-many-requests":      "Demasiados intentos fallidos. Esperá unos minutos.",
-    "auth/network-request-failed": "Error de red. Verificá tu conexión.",
-    "auth/user-disabled":          "Esta cuenta ha sido deshabilitada.",
+    "invalid_credentials":         "Correo o contraseña incorrectos.",
+    "user_not_found":              "No existe una cuenta con ese correo.",
   }
   return messages[code] ?? "Ocurrió un error inesperado. Intentá de nuevo."
 }

@@ -1,11 +1,4 @@
-import {
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-  type UploadTaskSnapshot,
-} from "firebase/storage"
-import { storage } from "./firebase"
+import { supabase } from "./supabase"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,50 +70,52 @@ function generateStorageName(file: File): string {
 
 /**
  * Uploads a single file to Storage under shipments/{shipmentId}/files/
- * Calls onProgress(0-100) during upload.
  * Resolves with an Attachment object on completion.
  */
-export function uploadShipmentFile(
+export async function uploadShipmentFile(
   shipmentId: string,
   file: File,
   onProgress?: (pct: number) => void
 ): Promise<Attachment> {
-  return new Promise((resolve, reject) => {
-    const filename    = generateStorageName(file)
-    const storagePath = `shipments/${shipmentId}/files/${filename}`
-    const fileRef     = ref(storage, storagePath)
+  const filename = generateStorageName(file)
+  // We don't include the bucket name in the path itself for Supabase methods
+  const storagePath = `${shipmentId}/files/${filename}`
 
-    const task = uploadBytesResumable(fileRef, file, {
-      contentType: file.type,
+  // Notify start
+  onProgress?.(10)
+
+  const { data, error } = await supabase
+    .storage
+    .from('shipments')
+    .upload(storagePath, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type
     })
 
-    task.on(
-      "state_changed",
-      (snapshot: UploadTaskSnapshot) => {
-        const pct = Math.round(
-          (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-        )
-        onProgress?.(pct)
-      },
-      (error) => reject(error),
-      async () => {
-        try {
-          const url: string = await getDownloadURL(task.snapshot.ref)
-          const attachment: Attachment = {
-            name:       file.name,
-            url,
-            path:       storagePath,
-            type:       file.type,
-            size:       file.size,
-            uploadedAt: new Date().toISOString(),
-          }
-          resolve(attachment)
-        } catch (err) {
-          reject(err)
-        }
-      }
-    )
-  })
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  // Notify near end
+  onProgress?.(90)
+
+  // Get public URL
+  const { data: urlData } = supabase
+    .storage
+    .from('shipments')
+    .getPublicUrl(storagePath)
+
+  onProgress?.(100)
+
+  return {
+    name:       file.name,
+    url:        urlData.publicUrl,
+    path:       storagePath, // Used for deletion
+    type:       file.type,
+    size:       file.size,
+    uploadedAt: new Date().toISOString(),
+  }
 }
 
 /**
@@ -147,7 +142,6 @@ export async function uploadShipmentFiles(
     if (result.status === "fulfilled") {
       attachments.push(result.value)
     }
-    // silently skip failed uploads — caller can handle via count mismatch
   }
   return attachments
 }
@@ -158,6 +152,12 @@ export async function uploadShipmentFiles(
  * Deletes a file from Storage by its storage path.
  */
 export async function deleteStorageFile(path: string): Promise<void> {
-  const fileRef = ref(storage, path)
-  await deleteObject(fileRef)
+  const { error } = await supabase
+    .storage
+    .from('shipments')
+    .remove([path])
+
+  if (error) {
+    throw new Error(error.message)
+  }
 }

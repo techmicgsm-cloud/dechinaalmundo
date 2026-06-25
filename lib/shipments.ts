@@ -1,20 +1,4 @@
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  orderBy,
-  serverTimestamp,
-  runTransaction,
-  getDoc,
-  arrayUnion,
-  arrayRemove,
-  Timestamp,
-} from "firebase/firestore"
-import { db } from "./firebase"
+import { supabase } from "./supabase"
 import type { Attachment } from "./storage"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -28,7 +12,7 @@ export type ShipmentStatus =
 export type ServiceType = "air" | "sea"
 
 export interface Shipment {
-  id: string // Firestore document ID
+  id: string // UUID from Supabase
   trackingCode: string
   customerName: string
   phone: string
@@ -39,8 +23,8 @@ export interface Shipment {
   weight: string
   serviceType: ServiceType
   attachments: Attachment[]
-  createdAt: Timestamp | null
-  updatedAt: Timestamp | null
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 export interface CreateShipmentData {
@@ -58,28 +42,30 @@ export interface CreateShipmentData {
 
 /**
  * Generates a unique tracking code like DCM-AR2401, DCM-AR2402, etc.
- * Uses a Firestore transaction on meta/counter to guarantee uniqueness.
  */
 export async function generateTrackingCode(): Promise<string> {
-  const counterRef = doc(db, "meta", "counter")
+  // Fetch current counter
+  const { data: metaData, error: fetchError } = await supabase
+    .from("meta")
+    .select("lastIndex")
+    .eq("id", "counter")
+    .single()
 
-  const newIndex = await runTransaction(db, async (transaction) => {
-    const counterSnap = await transaction.get(counterRef)
+  if (fetchError) throw fetchError
 
-    let current = 0
-    if (counterSnap.exists()) {
-      current = counterSnap.data().lastIndex ?? 0
-    }
+  const current = metaData?.lastIndex ?? 0
+  const next = current + 1
 
-    const next = current + 1
+  // Update counter
+  const { error: updateError } = await supabase
+    .from("meta")
+    .update({ lastIndex: next })
+    .eq("id", "counter")
 
-    transaction.set(counterRef, { lastIndex: next }, { merge: true })
-
-    return next
-  })
+  if (updateError) throw updateError
 
   // Format: DCM-AR + zero-padded 4-digit number
-  const paddedIndex = String(newIndex).padStart(4, "0")
+  const paddedIndex = String(next).padStart(4, "0")
   return `DCM-AR${paddedIndex}`
 }
 
@@ -93,162 +79,159 @@ export function subscribeShipments(
   onData: (shipments: Shipment[]) => void,
   onError: (error: Error) => void
 ): () => void {
-  const q = query(
-    collection(db, "shipments"),
-    orderBy("createdAt", "desc")
-  )
+  // Función para cargar los datos iniciales y cuando haya un cambio
+  const fetchShipments = async () => {
+    const { data, error } = await supabase
+      .from("shipments")
+      .select("*")
+      .order("createdAt", { ascending: false })
 
-  const unsubscribe = onSnapshot(
-    q,
-    (snapshot) => {
-      const shipments: Shipment[] = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data()
-        return {
-          id: docSnap.id,
-          trackingCode: data.trackingCode ?? "",
-          customerName: data.customerName ?? "",
-          phone: data.phone ?? "",
-          address: data.address ?? "",
-          destination: data.destination ?? "",
-          status: (data.status as ShipmentStatus) ?? "pendiente",
-          estimatedDelivery: data.estimatedDelivery ?? "",
-          weight: data.weight ?? "",
-          serviceType: (data.serviceType as ServiceType) ?? "air",
-          attachments: (data.attachments as Attachment[]) ?? [],
-          createdAt: data.createdAt ?? null,
-          updatedAt: data.updatedAt ?? null,
-        }
-      })
-      onData(shipments)
-    },
-    (error) => {
-      onError(error)
+    if (error) {
+      onError(new Error(error.message))
+      return
     }
-  )
 
-  return unsubscribe
+    if (data) {
+      onData(data as Shipment[])
+    }
+  }
+
+  // Carga inicial
+  fetchShipments()
+
+  // Suscripción a cambios
+  const channel = supabase
+    .channel("public:shipments")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "shipments" },
+      () => {
+        fetchShipments()
+      }
+    )
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
 }
 
 // ─── CRUD Operations ──────────────────────────────────────────────────────────
 
-/**
- * Creates a new shipment in Firestore with an auto-generated tracking code.
- * Returns both the trackingCode AND the Firestore document ID
- * (the doc ID is needed by the file uploader to build the Storage path).
- */
 export async function createShipment(
   data: CreateShipmentData
 ): Promise<{ trackingCode: string; docId: string }> {
   const trackingCode = await generateTrackingCode()
 
-  const docRef = await addDoc(collection(db, "shipments"), {
-    ...data,
-    trackingCode,
-    attachments: [],
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
+  const { data: newShipment, error } = await supabase
+    .from("shipments")
+    .insert([{
+      ...data,
+      trackingCode,
+      attachments: []
+    }])
+    .select("id")
+    .single()
 
-  return { trackingCode, docId: docRef.id }
+  if (error) throw new Error(error.message)
+
+  return { trackingCode, docId: newShipment.id }
 }
 
-/**
- * Updates only the status (and updatedAt) of a shipment.
- */
 export async function updateShipmentStatus(
   id: string,
   status: ShipmentStatus
 ): Promise<void> {
-  const shipmentRef = doc(db, "shipments", id)
-  await updateDoc(shipmentRef, {
-    status,
-    updatedAt: serverTimestamp(),
-  })
+  const { error } = await supabase
+    .from("shipments")
+    .update({ status, updatedAt: new Date().toISOString() })
+    .eq("id", id)
+
+  if (error) throw new Error(error.message)
 }
 
-/**
- * Updates all editable fields of a shipment.
- */
 export async function updateShipment(
   id: string,
   data: Partial<CreateShipmentData>
 ): Promise<void> {
-  const shipmentRef = doc(db, "shipments", id)
-  await updateDoc(shipmentRef, {
-    ...data,
-    updatedAt: serverTimestamp(),
-  })
+  const { error } = await supabase
+    .from("shipments")
+    .update({ ...data, updatedAt: new Date().toISOString() })
+    .eq("id", id)
+
+  if (error) throw new Error(error.message)
 }
 
-/**
- * Deletes a shipment permanently from Firestore.
- */
 export async function deleteShipment(id: string): Promise<void> {
-  await deleteDoc(doc(db, "shipments", id))
+  const { error } = await supabase
+    .from("shipments")
+    .delete()
+    .eq("id", id)
+
+  if (error) throw new Error(error.message)
 }
 
-/**
- * Appends new attachments to a shipment's attachments array in Firestore.
- */
 export async function addShipmentAttachments(
   id: string,
   attachments: Attachment[]
 ): Promise<void> {
-  const shipmentRef = doc(db, "shipments", id)
-  await updateDoc(shipmentRef, {
-    attachments: arrayUnion(...attachments),
-    updatedAt:   serverTimestamp(),
-  })
+  // En Supabase no hay arrayUnion directo desde el cliente,
+  // así que primero obtenemos el array actual y lo concatenamos
+  const { data, error: fetchError } = await supabase
+    .from("shipments")
+    .select("attachments")
+    .eq("id", id)
+    .single()
+
+  if (fetchError) throw new Error(fetchError.message)
+
+  const currentAttachments = (data?.attachments as Attachment[]) || []
+  const updatedAttachments = [...currentAttachments, ...attachments]
+
+  const { error: updateError } = await supabase
+    .from("shipments")
+    .update({ attachments: updatedAttachments, updatedAt: new Date().toISOString() })
+    .eq("id", id)
+
+  if (updateError) throw new Error(updateError.message)
 }
 
-/**
- * Removes a single attachment from the Firestore array by matching its path.
- */
 export async function removeShipmentAttachment(
   id: string,
   attachment: Attachment
 ): Promise<void> {
-  const shipmentRef = doc(db, "shipments", id)
-  await updateDoc(shipmentRef, {
-    attachments: arrayRemove(attachment),
-    updatedAt:   serverTimestamp(),
-  })
+  const { data, error: fetchError } = await supabase
+    .from("shipments")
+    .select("attachments")
+    .eq("id", id)
+    .single()
+
+  if (fetchError) throw new Error(fetchError.message)
+
+  const currentAttachments = (data?.attachments as Attachment[]) || []
+  const updatedAttachments = currentAttachments.filter(a => a.path !== attachment.path)
+
+  const { error: updateError } = await supabase
+    .from("shipments")
+    .update({ attachments: updatedAttachments, updatedAt: new Date().toISOString() })
+    .eq("id", id)
+
+  if (updateError) throw new Error(updateError.message)
 }
 
-/**
- * Looks up a shipment by its trackingCode (case-insensitive).
- * Returns null if not found.
- */
 export async function getShipmentByTrackingCode(
   trackingCode: string
 ): Promise<Shipment | null> {
-  const { query: firestoreQuery, where, getDocs } = await import("firebase/firestore")
+  const { data, error } = await supabase
+    .from("shipments")
+    .select("*")
+    .eq("trackingCode", trackingCode.toUpperCase().trim())
+    .single()
 
-  const q = firestoreQuery(
-    collection(db, "shipments"),
-    where("trackingCode", "==", trackingCode.toUpperCase().trim())
-  )
-
-  const snapshot = await getDocs(q)
-
-  if (snapshot.empty) return null
-
-  const docSnap = snapshot.docs[0]
-  const data = docSnap.data()
-
-  return {
-    id: docSnap.id,
-    trackingCode: data.trackingCode ?? "",
-    customerName: data.customerName ?? "",
-    phone: data.phone ?? "",
-    address: data.address ?? "",
-    destination: data.destination ?? "",
-    status: (data.status as ShipmentStatus) ?? "pendiente",
-    estimatedDelivery: data.estimatedDelivery ?? "",
-    weight: data.weight ?? "",
-    serviceType: (data.serviceType as ServiceType) ?? "air",
-    attachments: (data.attachments as Attachment[]) ?? [],
-    createdAt: data.createdAt ?? null,
-    updatedAt: data.updatedAt ?? null,
+  if (error) {
+    if (error.code === 'PGRST116') return null // No rows found
+    throw new Error(error.message)
   }
+
+  return data as Shipment
 }
