@@ -44,7 +44,10 @@ export default function AdminLayout({
   const router     = useRouter()
   const { user, loading: authLoading, isAuthenticated } = useAuth()
 
-  // ── Auth guard: redirect to /login if not authenticated ──────────────────
+  // ── Auth guard: redirect to /login if not authenticated or not allowed ──
+  const allowedEmails = ["diazarielg@gmail.com", "techmicgsm@gmail.com"]
+  const isAllowed = user?.email && allowedEmails.includes(user.email)
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -60,9 +63,12 @@ export default function AdminLayout({
     )
   }
 
-  if (!isAuthenticated) {
-    // Redirect via router — useEffect not needed because this is render-time
+  if (!isAuthenticated || !isAllowed) {
     if (typeof window !== "undefined") {
+      if (isAuthenticated && !isAllowed) {
+        // If logged in with an unauthorized email, sign them out
+        signOut().catch(console.error)
+      }
       router.replace("/login")
     }
     return null
