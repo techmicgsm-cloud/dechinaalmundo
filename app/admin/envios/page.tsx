@@ -283,7 +283,7 @@ export default function EnviosPage() {
           <div className="absolute inset-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           <Package className="absolute inset-0 m-auto w-6 h-6 text-primary" />
         </div>
-        <p className="text-muted-foreground text-sm">Conectando con Firestore...</p>
+        <p className="text-muted-foreground text-sm">Conectando con Supabase...</p>
       </div>
     )
   }
