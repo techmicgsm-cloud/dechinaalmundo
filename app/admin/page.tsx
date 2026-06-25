@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import {
   Package,
@@ -15,121 +15,11 @@ import {
   MoreHorizontal,
   Plane,
   Ship,
-  Calendar,
   DollarSign,
+  Loader2,
 } from "lucide-react"
 import Link from "next/link"
-
-// Dashboard data
-const stats = [
-  {
-    name: "Total Envíos",
-    value: "1,284",
-    change: "+12.5%",
-    trend: "up",
-    icon: Package,
-    color: "from-blue-500 to-blue-600",
-  },
-  {
-    name: "En Tránsito",
-    value: "342",
-    change: "+8.2%",
-    trend: "up",
-    icon: Truck,
-    color: "from-primary to-orange-600",
-  },
-  {
-    name: "Entregados",
-    value: "891",
-    change: "+15.3%",
-    trend: "up",
-    icon: CheckCircle2,
-    color: "from-emerald-500 to-emerald-600",
-  },
-  {
-    name: "Pendientes",
-    value: "51",
-    change: "-5.1%",
-    trend: "down",
-    icon: Clock,
-    color: "from-amber-500 to-amber-600",
-  },
-]
-
-const recentShipments = [
-  {
-    id: "DCM-DEMO01",
-    client: "María García",
-    status: "en_transito",
-    origin: "Shanghai, China",
-    destination: "Buenos Aires, Argentina",
-    date: "2024-01-15",
-    type: "air",
-  },
-  {
-    id: "DCM-AR2401",
-    client: "Carlos López",
-    status: "entregado",
-    origin: "Shenzhen, China",
-    destination: "Córdoba, Argentina",
-    date: "2024-01-14",
-    type: "sea",
-  },
-  {
-    id: "CN-TRACK01",
-    client: "Ana Martínez",
-    status: "en_aduana",
-    origin: "Guangzhou, China",
-    destination: "Mendoza, Argentina",
-    date: "2024-01-13",
-    type: "air",
-  },
-  {
-    id: "DCM-RS2401",
-    client: "Roberto Sánchez",
-    status: "pendiente",
-    origin: "Beijing, China",
-    destination: "Rosario, Argentina",
-    date: "2024-01-12",
-    type: "sea",
-  },
-  {
-    id: "DCM-LP2401",
-    client: "Laura Fernández",
-    status: "en_transito",
-    origin: "Shanghai, China",
-    destination: "La Plata, Argentina",
-    date: "2024-01-11",
-    type: "air",
-  },
-]
-
-const recentActivity = [
-  {
-    id: 1,
-    action: "Nuevo envío creado",
-    shipment: "DCM-DEMO01",
-    time: "Hace 2 horas",
-  },
-  {
-    id: 2,
-    action: "Estado actualizado a En Tránsito",
-    shipment: "DCM-AR2401",
-    time: "Hace 4 horas",
-  },
-  {
-    id: 3,
-    action: "Envío entregado",
-    shipment: "CN-TRACK01",
-    time: "Hace 6 horas",
-  },
-  {
-    id: 4,
-    action: "Cliente registrado",
-    shipment: "Roberto Sánchez",
-    time: "Hace 8 horas",
-  },
-]
+import { subscribeShipments, type Shipment } from "@/lib/shipments"
 
 const statusConfig: Record<string, { label: string; class: string }> = {
   pendiente: { label: "Pendiente", class: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
@@ -140,6 +30,87 @@ const statusConfig: Record<string, { label: string; class: string }> = {
 
 export default function AdminDashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState("7d")
+  const [shipments, setShipments] = useState<Shipment[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const unsubscribe = subscribeShipments(
+      (data) => {
+        setShipments(data)
+        setLoading(false)
+      },
+      (error) => {
+        console.error("Error fetching shipments:", error)
+        setLoading(false)
+      }
+    )
+    return () => unsubscribe()
+  }, [])
+
+  // ── Cálculos Dinámicos ──
+
+  const totalShipments = shipments.length
+  const inTransitCount = shipments.filter((s) => s.status === "en_transito").length
+  const deliveredCount = shipments.filter((s) => s.status === "entregado").length
+  const pendingCount = shipments.filter((s) => s.status === "pendiente").length
+
+  const airCount = shipments.filter((s) => s.serviceType === "air").length
+  const seaCount = shipments.filter((s) => s.serviceType === "sea").length
+
+  // Mostrar los últimos 5 envíos (ya vienen ordenados por fecha desc desde lib)
+  const recentShipments = shipments.slice(0, 5)
+
+  // Usaremos los envíos recientes como "Actividad reciente"
+  const recentActivity = recentShipments.map((s, index) => ({
+    id: s.id,
+    action: `Nuevo envío ${s.serviceType === "air" ? "Aéreo" : "Marítimo"} registrado`,
+    shipment: s.trackingCode,
+    time: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "Reciente",
+  }))
+
+  const stats = [
+    {
+      name: "Total Envíos",
+      value: totalShipments.toString(),
+      change: "+0.0%",
+      trend: "up",
+      icon: Package,
+      color: "from-blue-500 to-blue-600",
+    },
+    {
+      name: "En Tránsito",
+      value: inTransitCount.toString(),
+      change: "+0.0%",
+      trend: "up",
+      icon: Truck,
+      color: "from-primary to-orange-600",
+    },
+    {
+      name: "Entregados",
+      value: deliveredCount.toString(),
+      change: "+0.0%",
+      trend: "up",
+      icon: CheckCircle2,
+      color: "from-emerald-500 to-emerald-600",
+    },
+    {
+      name: "Pendientes",
+      value: pendingCount.toString(),
+      change: "+0.0%",
+      trend: "down",
+      icon: Clock,
+      color: "from-amber-500 to-amber-600",
+    },
+  ]
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <p className="text-muted-foreground text-sm">Cargando dashboard...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -214,11 +185,11 @@ export default function AdminDashboard() {
       {/* Charts and tables section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent shipments table */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="lg:col-span-2 bg-card border border-border rounded-2xl overflow-hidden flex flex-col">
           <div className="p-6 border-b border-border flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Envíos Recientes</h2>
-              <p className="text-sm text-muted-foreground">Últimos 5 envíos registrados</p>
+              <p className="text-sm text-muted-foreground">Últimos {recentShipments.length} envíos registrados</p>
             </div>
             <Link
               href="/admin/envios"
@@ -228,7 +199,7 @@ export default function AdminDashboard() {
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto flex-1">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
@@ -250,7 +221,13 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {recentShipments.map((shipment, index) => (
+                {recentShipments.length === 0 ? (
+                   <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                      No hay envíos registrados
+                    </td>
+                  </tr>
+                ) : recentShipments.map((shipment, index) => (
                   <motion.tr
                     key={shipment.id}
                     initial={{ opacity: 0 }}
@@ -260,47 +237,50 @@ export default function AdminDashboard() {
                   >
                     <td className="px-6 py-4">
                       <Link
-                        href={`/tracking/${shipment.id}`}
+                        href={`/tracking/${shipment.trackingCode}`}
                         className="text-sm font-mono font-medium text-primary hover:underline"
+                        target="_blank"
                       >
-                        {shipment.id}
+                        {shipment.trackingCode}
                       </Link>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-foreground">{shipment.client}</span>
+                      <span className="text-sm text-foreground">{shipment.customerName}</span>
                     </td>
                     <td className="px-6 py-4">
                       <span
                         className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg border ${
-                          statusConfig[shipment.status].class
+                          statusConfig[shipment.status]?.class || ""
                         }`}
                       >
-                        {statusConfig[shipment.status].label}
+                        {statusConfig[shipment.status]?.label || shipment.status}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        {shipment.type === "air" ? (
+                        {shipment.serviceType === "air" ? (
                           <Plane className="w-4 h-4 text-blue-400" />
                         ) : (
                           <Ship className="w-4 h-4 text-cyan-400" />
                         )}
                         <span className="text-sm text-muted-foreground capitalize">
-                          {shipment.type === "air" ? "Aéreo" : "Marítimo"}
+                          {shipment.serviceType === "air" ? "Aéreo" : "Marítimo"}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <Link
-                          href={`/tracking/${shipment.id}`}
+                          href={`/tracking/${shipment.trackingCode}`}
                           className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                          title="Ver tracking"
+                          target="_blank"
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
-                        <button className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors">
+                        <Link href="/admin/envios" className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors" title="Gestionar">
                           <MoreHorizontal className="w-4 h-4" />
-                        </button>
+                        </Link>
                       </div>
                     </td>
                   </motion.tr>
@@ -317,7 +297,9 @@ export default function AdminDashboard() {
             <p className="text-sm text-muted-foreground">Últimos movimientos</p>
           </div>
           <div className="p-4 space-y-3">
-            {recentActivity.map((activity, index) => (
+            {recentActivity.length === 0 ? (
+               <p className="text-sm text-muted-foreground text-center py-4">Sin actividad</p>
+            ) : recentActivity.map((activity, index) => (
               <motion.div
                 key={activity.id}
                 initial={{ opacity: 0, x: -10 }}
@@ -338,7 +320,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Quick stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 lg:gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -349,7 +331,7 @@ export default function AdminDashboard() {
               <Plane className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">156</p>
+              <p className="text-2xl font-bold text-foreground">{airCount}</p>
               <p className="text-sm text-muted-foreground">Envíos Aéreos</p>
             </div>
           </div>
@@ -365,24 +347,8 @@ export default function AdminDashboard() {
               <Ship className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">186</p>
+              <p className="text-2xl font-bold text-foreground">{seaCount}</p>
               <p className="text-sm text-muted-foreground">Envíos Marítimos</p>
-            </div>
-          </div>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-card border border-border rounded-2xl p-6"
-        >
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500">
-              <DollarSign className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">$45.2K</p>
-              <p className="text-sm text-muted-foreground">Ingresos del Mes</p>
             </div>
           </div>
         </motion.div>
