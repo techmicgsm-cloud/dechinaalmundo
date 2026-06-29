@@ -40,29 +40,35 @@ export interface CreateShipmentData {
 
 // ─── Tracking Code Generator ──────────────────────────────────────────────────
 
-/**
- * Generates a unique tracking code like DCM-AR2401, DCM-AR2402, etc.
- */
 export async function generateTrackingCode(): Promise<string> {
   // Fetch current counter
   const { data: metaData, error: fetchError } = await supabase
     .from("meta")
-    .select("lastIndex")
+    .select("lastindex")
     .eq("id", "counter")
-    .single()
+    .maybeSingle()
 
   if (fetchError) throw fetchError
 
-  const current = metaData?.lastIndex ?? 0
+  const current = metaData?.lastindex ?? 0
   const next = current + 1
 
-  // Update counter
-  const { error: updateError } = await supabase
-    .from("meta")
-    .update({ lastIndex: next })
-    .eq("id", "counter")
+  if (metaData) {
+    // Update counter
+    const { error: updateError } = await supabase
+      .from("meta")
+      .update({ lastindex: next })
+      .eq("id", "counter")
 
-  if (updateError) throw updateError
+    if (updateError) throw updateError
+  } else {
+    // Insert counter
+    const { error: insertError } = await supabase
+      .from("meta")
+      .insert({ id: "counter", lastindex: next })
+
+    if (insertError) throw insertError
+  }
 
   // Format: DCM-AR + zero-padded 4-digit number
   const paddedIndex = String(next).padStart(4, "0")
