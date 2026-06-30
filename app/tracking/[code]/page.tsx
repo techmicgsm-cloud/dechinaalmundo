@@ -677,9 +677,12 @@ export default function TrackingPage() {
     setTrackingInfo(null)
 
     const fetchTracking = async () => {
+      if (!code) return
+      const decodedCode = decodeURIComponent(code)
+
       // 1. Try Firestore (real shipments from admin panel)
       try {
-        const firestoreShipment = await getShipmentByTrackingCode(code)
+        const firestoreShipment = await getShipmentByTrackingCode(decodedCode)
         if (firestoreShipment) {
           // Map Firestore Shipment to TrackingInfo format
           const mappedInfo: TrackingInfo = {
