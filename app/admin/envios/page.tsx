@@ -23,6 +23,7 @@ import {
   UploadCloud,
   ImageIcon,
   FileText,
+  ChevronDown,
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -446,15 +447,18 @@ export default function EnviosPage() {
                             <span className="text-xs text-muted-foreground">Guardando...</span>
                           </div>
                         ) : (
-                          <select
-                            value={shipment.status}
-                            onChange={(e) => handleStatusChange(shipment, e.target.value as ShipmentStatus)}
-                            className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border cursor-pointer appearance-none transition-colors ${statusConfig[shipment.status].class}`}
-                          >
-                            {statusOptions.map((s) => (
-                              <option key={s.value} value={s.value} className="bg-background text-foreground">{s.label}</option>
-                            ))}
-                          </select>
+                          <div className="relative inline-flex items-center">
+                            <select
+                              value={shipment.status}
+                              onChange={(e) => handleStatusChange(shipment, e.target.value as ShipmentStatus)}
+                              className={`text-xs font-medium pl-2.5 pr-7 py-1.5 rounded-lg border cursor-pointer appearance-none transition-colors ${statusConfig[shipment.status].class}`}
+                            >
+                              {statusOptions.map((s) => (
+                                <option key={s.value} value={s.value} className="bg-background text-foreground">{s.label}</option>
+                              ))}
+                            </select>
+                            <ChevronDown className={`absolute right-2 w-3.5 h-3.5 pointer-events-none opacity-70`} />
+                          </div>
                         )}
                       </div>
                     </td>
