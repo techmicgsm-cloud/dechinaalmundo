@@ -352,9 +352,9 @@ export default function EnviosPage() {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="pl-10 pr-8 py-2.5 bg-card border border-border rounded-xl text-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="all">Todos los estados</option>
+              <option value="all" className="bg-background text-foreground">Todos los estados</option>
               {statusOptions.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
+                <option key={s.value} value={s.value} className="bg-background text-foreground">{s.label}</option>
               ))}
             </select>
           </div>
@@ -452,7 +452,7 @@ export default function EnviosPage() {
                             className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border cursor-pointer appearance-none transition-colors ${statusConfig[shipment.status].class}`}
                           >
                             {statusOptions.map((s) => (
-                              <option key={s.value} value={s.value}>{s.label}</option>
+                              <option key={s.value} value={s.value} className="bg-background text-foreground">{s.label}</option>
                             ))}
                           </select>
                         )}
@@ -676,7 +676,7 @@ export default function EnviosPage() {
                       className="w-full px-4 py-2.5 bg-input border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                     >
                       {statusOptions.map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
+                        <option key={s.value} value={s.value} className="bg-background text-foreground">{s.label}</option>
                       ))}
                     </select>
                   </div>
@@ -689,7 +689,7 @@ export default function EnviosPage() {
                       className="w-full px-4 py-2.5 bg-input border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                     >
                       {typeOptions.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
+                        <option key={t.value} value={t.value} className="bg-background text-foreground">{t.label}</option>
                       ))}
                     </select>
                   </div>
