@@ -658,7 +658,7 @@ function generateEventsFromStatus(status: string, destination: string) {
     },
   ]
 
-  return allEvents
+  return allEvents.filter((event) => event.completed || event.current || event.id === 1)
 }
 
 export default function TrackingPage() {
